@@ -1,0 +1,207 @@
+<!doctype html>
+<title>Tiny Bias Test</title>
+<p>
+	This is testing the effect of a tiny bias.
+<p>
+	Initially every level is filled with people with a randomly assigned gender (50/50),
+	and a randomly assigned quality level (0-1).
+<p>
+	Each cycle, a random 15% of each level is culled;
+	they've retired, or moved on to other companies.
+	Each level, starting from the top,
+	then fills their holes by grabbing the best people from the level immediately below;
+	level 8 grabs the best level 7s,
+	level 7 grabs the best level 6s,
+	etc.
+	Level 1 refills by generating new random people.
+<p>
+	There is a very tiny bias introduced here -
+	when comparing two workers,
+	red workers get a 1% boost to their perceived performance.
+	This is just half the minimum difference that Google's own internal scoring system
+	(5 point scale, incremented in tenths, for 50 total values)
+	can even indicate.
+<p>
+	The goal of this is to show how very tiny initial biases
+	can be massively magnified by persistence.
+<p>
+	Press this <button id="start">Start</button> button to begin the process.
+	It will stop either when all the initial population has been replaced,
+	or when 1k generations has passed,
+	whichever comes first.
+	Or press <button id="step">Step</button> to move it one step at a time.
+	Press <button id="reset">Reset</button> to reset the sim.
+
+<table id="results" class=company>
+</table>
+
+<style>
+table.company td div { float: left; height: 1em; width: 500px; text-align: center;}
+</style>
+
+<script>
+"use strict";
+function generateWorker(color) {
+	if(!color) color = Math.random() < .5 ? "blue" : "red";
+	let quality = Math.normal();
+	return {"color": color, "quality": quality};
+}
+
+Math.normal = function() {
+	return (Math.random() + Math.random() + Math.random()) / 3;
+}
+
+
+function generateCompany(generateWorker, levelCounts) {
+	let company = {};
+	let counts = {red:{count:0, quality:0}, blue:{count:0, quality:0}};
+	for(const [level, count] of Object.entries(levelCounts)) {
+		company[level] = [];
+		for(var i = 0; i < count; i++) {
+			let color = i < (count/2) ? "red" : "blue";
+			let worker = generateWorker(color);
+			worker.original = true;
+			company[level].push(worker);
+			counts[worker.color].count++;
+			counts[worker.color].quality += worker.quality;
+		}
+	}
+	console.log("Red avg quality: " + (counts.red.quality/counts.red.count).toFixed(3));
+	console.log("Blue avg quality: " + (counts.blue.quality/counts.blue.count).toFixed(3));
+	return company;
+}
+
+function colorShare(workers) {
+	let red = 0;
+	let blue = 0;
+	let count = 0;
+	for(let worker of workers) {
+		count++;
+		if(worker.color == "red") red++;
+		else blue++;
+	}
+	return [red/count, blue/count];
+}
+
+function printCompany(company, table, gen) {
+	if(!gen) gen = 0;
+	table.innerHTML = `<tr><th>Gen ${gen}<td>`;
+	for(let level = 8; level >= 1; level--) {
+		const workers = company[level];
+		let [redShare, blueShare] = colorShare(workers);
+		let tr = document.createElement("tr");
+		tr.innerHTML = `<th>Level ${level}
+		                <td>
+		                	<div style="background: hsl(0, 80%, 70%); width: ${redShare*500}px;">${(redShare*100).toFixed(0)}%</div>
+		                	<div style="background: hsl(240, 80%, 80%); width: ${blueShare*500}px;">${(blueShare*100).toFixed(0)}%</div>`
+		table.appendChild(tr);
+	}
+}
+
+function stepCompany(company, attrition, generateWorker) {
+	const newCompany = {};
+	// Cull attrition% of each level
+	for(const [level, workers] of Object.entries(company)) {
+		const remaining = cullWorkers(workers, attrition);
+		newCompany[level] = remaining;
+	}
+	// Now fill from the top down, grabbing from lower level.
+	for(let level = 8; level >= 1; level--) {
+		const workers = company[level];
+		if(level == 1) {
+			// Bottom level, fill with randoms.
+			while(newCompany[1].length < company[1].length) {
+				newCompany[1].push(generateWorker());
+			}
+		} else {
+			// Fill from the lower level
+			let lower = newCompany[level - 1].sort(compareWorkers);
+			while(newCompany[level].length < company[level].length) {
+				newCompany[level].push(lower.pop());
+			}
+		}
+	}
+	return newCompany;
+}
+
+function compareWorkers(a,b) {
+	let aQuality = a.quality;
+	let bQuality = b.quality;
+	if(a.color == "red") aQuality += bias;
+	if(b.color == "red") bQuality += bias;
+	return aQuality - bQuality;
+}
+
+function cullWorkers(workers, attrition) {
+	const numToCull = Math.round(workers.length * attrition);
+	const newWorkers = shuffleArray(workers);
+	for(var i = 0; i < numToCull; i++) {
+		newWorkers.pop();
+	}
+	return newWorkers;
+}
+
+function shuffleArray(arr) {
+	let newArr = [...arr];
+	for(let i = newArr.length - 1; i >= 0; i--) {
+		let randomIndex = Math.floor(Math.random() * i);
+		[newArr[i], newArr[randomIndex]] = [newArr[randomIndex], newArr[i]];
+	}
+	return newArr;
+}
+
+function originalsGoneP(company) {
+	// Checks to see if all original people (tagged with .original=true) are gone.
+	for(let workers of Object.values(company)) {
+		for(let worker of workers) {
+			if(worker.original) return false;
+		}
+	}
+	return true;
+}
+
+function runSim(company, attrition, generateWorker, table) {
+	printCompany(company, table);
+	const num = 1e2;
+	let endedEarly = false;
+	for(let i = 0; i < num; i++) {
+		company = stepCompany(company, attrition, generateWorker);
+		printCompany(company, table, i);
+		if(false){//originalsGoneP(company)) {
+			endedEarly = true;
+			break;
+		}
+	}
+	if(!endedEarly) console.log("Ran out of time.");
+	else console.log("All originals are gone.");
+}
+
+let levelRatio = 2;//1.78;
+let levelOne = 10000;
+const levels = {
+	"8": levelOne / Math.pow(levelRatio, 7),
+	"7": levelOne / Math.pow(levelRatio, 6),
+	"6": levelOne / Math.pow(levelRatio, 5),
+	"5": levelOne / Math.pow(levelRatio, 4),
+	"4": levelOne / Math.pow(levelRatio, 3),
+	"3": levelOne / Math.pow(levelRatio, 2),
+	"2": levelOne / Math.pow(levelRatio, 1),
+	"1": levelOne,
+};
+const bias = 1/100;
+
+let company = generateCompany(generateWorker, levels);
+let table = document.querySelector("#results");
+printCompany(company, table);
+document.querySelector("#start").addEventListener("click", function() {
+	runSim(company, .15, generateWorker, table);
+});
+document.querySelector("#step").addEventListener("click", function() {
+	company = stepCompany(company, .15, generateWorker);
+	printCompany(company, table);
+});
+document.querySelector("#reset").addEventListener("click", function(){
+	company = generateCompany(generateWorker, levels);
+	printCompany(company, table)
+});
+</script>
