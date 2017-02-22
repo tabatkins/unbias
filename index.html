@@ -25,12 +25,11 @@
 	The goal of this is to show how very tiny initial biases
 	can be massively magnified by persistence.
 <p>
-	Press this <button id="start">Start</button> button to begin the process.
-	It will stop either when all the initial population has been replaced,
-	or when 1k generations has passed,
-	whichever comes first.
-	Or press <button id="step">Step</button> to move it one step at a time.
-	Press <button id="reset">Reset</button> to reset the sim.
+	Press this <button id="start">Start</button> button to begin the process;
+	it will run until all the original population has left the company
+	(guaranteeing that each level is composed purely of people who have been promoted).
+	You can press it multiple times to rerun with the same initial population,
+	or refresh to get a new initial population.
 
 <table id="results" class=company>
 </table>
@@ -162,21 +161,15 @@ function originalsGoneP(company) {
 
 function runSim(company, attrition, generateWorker, table) {
 	printCompany(company, table);
-	const num = 1e2;
-	let endedEarly = false;
-	for(let i = 0; i < num; i++) {
+	let i = 1;
+	while(!originalsGoneP(company)) {
 		company = stepCompany(company, attrition, generateWorker);
 		printCompany(company, table, i);
-		if(false){//originalsGoneP(company)) {
-			endedEarly = true;
-			break;
-		}
+		i++;
 	}
-	if(!endedEarly) console.log("Ran out of time.");
-	else console.log("All originals are gone.");
 }
 
-let levelRatio = 2;//1.78;
+let levelRatio = 1.93; // 7th root of 100
 let levelOne = 10000;
 const levels = {
 	"8": levelOne / Math.pow(levelRatio, 7),
@@ -196,6 +189,7 @@ printCompany(company, table);
 document.querySelector("#start").addEventListener("click", function() {
 	runSim(company, .15, generateWorker, table);
 });
+/*
 document.querySelector("#step").addEventListener("click", function() {
 	company = stepCompany(company, .15, generateWorker);
 	printCompany(company, table);
@@ -204,4 +198,5 @@ document.querySelector("#reset").addEventListener("click", function(){
 	company = generateCompany(generateWorker, levels);
 	printCompany(company, table)
 });
+*/
 </script>
