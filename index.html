@@ -4,7 +4,7 @@
 	This is testing the effect of a tiny bias.
 <p>
 	Initially every level is filled with people with a randomly assigned gender (50/50),
-	and a randomly assigned quality level (0-1).
+	and a randomly assigned quality level (0-1, from a roughly normal distribution).
 <p>
 	Each cycle, a random 15% of each level is culled;
 	they've retired, or moved on to other companies.
@@ -17,19 +17,26 @@
 <p>
 	There is a very tiny bias introduced here -
 	when comparing two workers,
-	red workers get a 1% boost to their perceived performance.
-	This is just half the minimum difference that Google's own internal scoring system
+	red workers get a 2% boost to their perceived performance.
+	This is the <em>minimum</em> difference that Google's own internal scoring system
 	(5 point scale, incremented in tenths, for 50 total values)
-	can even indicate.
+	can even indicate -
+	in other words,
+	it means that a red who "deserved" a 3.4
+	would instead get a 3.5,
+	while a blue with the same quality gets the 3.4.
+	This difference is far too small to even consciously give;
+	we can't actually articulate the difference between a 3.4 and 3.5,
+	so the difference is purely due to forces underneath our conscious mind.
 <p>
 	The goal of this is to show how very tiny initial biases
-	can be massively magnified by persistence.
+	can be massively magnified by repetition.
 <p>
 	Press this <button id="start">Start</button> button to begin the process;
-	it will run until all the original population has left the company
-	(guaranteeing that each level is composed purely of people who have been promoted).
-	You can press it multiple times to rerun with the same initial population,
-	or refresh to get a new initial population.
+	it'll do 20 runs,
+	running each until all the original population has left the company
+	(guaranteeing that each level is composed purely of fresh people who have been promoted),
+	and report the average results.
 
 <table id="results" class=company>
 </table>
@@ -71,6 +78,7 @@ function generateCompany(generateWorker, levelCounts) {
 }
 
 function colorShare(workers) {
+	if(typeof workers == "number") return [workers, 1-workers];
 	let red = 0;
 	let blue = 0;
 	let count = 0;
@@ -160,17 +168,32 @@ function originalsGoneP(company) {
 }
 
 function runSim(company, attrition, generateWorker, table) {
+	const originalCompany = company;
 	printCompany(company, table);
-	let i = 1;
-	while(!originalsGoneP(company)) {
-		company = stepCompany(company, attrition, generateWorker);
-		printCompany(company, table, i);
-		i++;
+	const reds  = [0,0,0,0,0,0,0,0,0];
+	const total = [0,0,0,0,0,0,0,0,0];
+	for(let i = 0; i < 20; i++) {
+		company = originalCompany
+		for(let j = 0; j < 70; j++) { // In practice, originals are all gone within 70 gens.
+			company = stepCompany(company, attrition, generateWorker);
+		}
+		countWorkers(company, reds, total);
+	}
+	const averageCompany = reds.map((e,i)=>e/total[i]);
+	printCompany(averageCompany, table);
+}
+
+function countWorkers(company, reds, totals) {
+	for(let [level, workers] of Object.entries(company)) {
+		for(let worker of workers) {
+			if(worker.color == "red") reds[level]++;
+			totals[level]++;
+		}
 	}
 }
 
-let levelRatio = 1.93; // 7th root of 100
-let levelOne = 10000;
+let levelRatio = 1.7;
+let levelOne = 1000;
 const levels = {
 	"8": levelOne / Math.pow(levelRatio, 7),
 	"7": levelOne / Math.pow(levelRatio, 6),
@@ -181,7 +204,7 @@ const levels = {
 	"2": levelOne / Math.pow(levelRatio, 1),
 	"1": levelOne,
 };
-const bias = 1/100;
+const bias = 2/100;
 
 let company = generateCompany(generateWorker, levels);
 let table = document.querySelector("#results");
